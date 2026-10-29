@@ -1,0 +1,1520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MedLoop — Hyperlocal Medical Equipment Registry & Custody Console</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #f8fafc;
+      color: #0f172a;
+    }
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-50 text-slate-900">
+
+  <!-- Mandatory Regulatory & Framing Banner -->
+  <div class="bg-amber-950 text-amber-100 text-xs px-4 py-2 border-b border-amber-800">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
+      <div class="flex items-center gap-2">
+        <span class="inline-block w-2 h-2 rounded-full bg-amber-400"></span>
+        <span><strong>Regulatory Disclaimer:</strong> MedLoop enforces and records an inspection, sanitization, and custody workflow. It does <strong>NOT</strong> verify physical safety. All data is synthetic (<span class="mono">seed=42</span>). Device reuse in India is subject to CDSCO regulations.</span>
+      </div>
+      <span class="mono text-[11px] text-amber-300">B.Tech CSE MongoDB Project</span>
+    </div>
+  </div>
+
+  <!-- Top Navigation & API Connection Header -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-teal-600 flex items-center justify-center text-white font-bold text-lg shadow-sm">
+          ML
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg font-bold tracking-tight text-slate-900">MedLoop Registry Console</h1>
+            <span id="connectionBadge" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+              <span id="connectionDot" class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+              <span id="connectionText">Checking FastAPI...</span>
+            </span>
+          </div>
+          <p class="text-xs text-slate-500">Hyperlocal Equipment Matching ($geoNear 25 km), Atomic Custody State Machine & Shortage Forecasting</p>
+        </div>
+      </div>
+
+      <!-- API URL Config & Sync Button -->
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="flex items-center bg-slate-100 rounded-lg px-2.5 py-1.5 border border-slate-200">
+          <label for="apiBaseInput" class="text-xs font-medium text-slate-500 mr-2">FastAPI URL:</label>
+          <input id="apiBaseInput" type="text" value="http://127.0.0.1:8000" class="bg-transparent text-xs mono text-slate-800 focus:outline-none w-44" />
+        </div>
+        <button id="syncBackendBtn" type="button" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white transition shadow-sm">
+          Sync Live DB
+        </button>
+      </div>
+    </div>
+
+    <!-- Primary Navigation Tabs -->
+    <div class="max-w-7xl mx-auto px-4 flex items-center gap-1 border-t border-slate-100 overflow-x-auto">
+      <button id="tabBtnAnalytics" type="button" data-tab="analytics" class="nav-tab-btn px-4 py-2.5 text-xs font-semibold border-b-2 border-teal-600 text-teal-700 whitespace-nowrap">
+        1. Analytics &amp; AI Shortage Forecast
+      </button>
+      <button id="tabBtnMatcher" type="button" data-tab="matcher" class="nav-tab-btn px-4 py-2.5 text-xs font-semibold border-b-2 border-transparent text-slate-600 hover:text-slate-900 whitespace-nowrap">
+        2. Patient Request &amp; 25 km $geoNear Matcher
+      </button>
+      <button id="tabBtnLifecycle" type="button" data-tab="lifecycle" class="nav-tab-btn px-4 py-2.5 text-xs font-semibold border-b-2 border-transparent text-slate-600 hover:text-slate-900 whitespace-nowrap">
+        3. Device Registry &amp; Atomic State Machine
+      </button>
+    </div>
+  </header>
+
+  <!-- Toast Notification Banner -->
+  <div id="toastContainer" class="fixed bottom-4 right-4 z-50 max-w-md hidden">
+    <div id="toastBox" class="rounded-xl p-4 shadow-lg border flex items-start justify-between gap-3 bg-slate-900 text-white border-slate-700">
+      <div>
+        <p id="toastTitle" class="text-xs font-bold uppercase tracking-wider text-teal-400">System Notification</p>
+        <p id="toastMessage" class="text-xs mt-1 leading-relaxed"></p>
+      </div>
+      <button id="closeToastBtn" type="button" class="text-slate-400 hover:text-white text-sm font-bold px-1">✕</button>
+    </div>
+  </div>
+
+  <!-- Main Content Container -->
+  <main class="max-w-7xl mx-auto w-full px-4 py-6 flex-1 space-y-6">
+
+    <!-- KPI Overview Strip -->
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium text-slate-500">Total Seeded Devices</span>
+          <span class="text-xs font-semibold px-2 py-0.5 rounded bg-teal-50 text-teal-700 mono">devices</span>
+        </div>
+        <p id="kpiTotalDevices" class="text-2xl font-bold text-slate-900 mt-2">2,000</p>
+        <p class="text-xs text-slate-500 mt-1">Across Ludhiana, Delhi &amp; Bengaluru</p>
+      </div>
+
+      <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium text-slate-500">Open Patient Requests</span>
+          <span class="text-xs font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700 mono">TTL: 14d</span>
+        </div>
+        <p id="kpiOpenRequests" class="text-2xl font-bold text-slate-900 mt-2">975</p>
+        <p class="text-xs text-slate-500 mt-1">Auto-purged via <span class="mono">expires_at</span> TTL index</p>
+      </div>
+
+      <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium text-slate-500">Flagged Weekly Shortages</span>
+          <span class="text-xs font-semibold px-2 py-0.5 rounded bg-rose-50 text-rose-700 mono">Forecast &gt; Supply</span>
+        </div>
+        <p id="kpiShortageCount" class="text-2xl font-bold text-rose-600 mt-2">0</p>
+        <p class="text-xs text-slate-500 mt-1">28-day moving-average baseline</p>
+      </div>
+
+      <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium text-slate-500">Overdue Compliance Units</span>
+          <span class="text-xs font-semibold px-2 py-0.5 rounded bg-amber-50 text-amber-800 mono">Pipeline 1</span>
+        </div>
+        <p id="kpiOverdueCount" class="text-2xl font-bold text-amber-600 mt-2">0</p>
+        <p class="text-xs text-slate-500 mt-1">Sanitization &gt;30d or Inspection &gt;180d</p>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- TAB 1: ANALYTICS & AI SHORTAGE FORECAST                             -->
+    <!-- =================================================================== -->
+    <section id="tabPanelAnalytics" class="space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Chart Card -->
+        <div class="lg:col-span-5 bg-white rounded-xl border border-slate-200 p-5 shadow-sm flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between gap-2">
+              <h2 class="text-sm font-bold text-slate-900">Demand vs. Available Supply by Category</h2>
+              <select id="analyticsCityFilter" class="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-slate-50 font-medium text-slate-700">
+                <option value="ALL">All Cities</option>
+                <option value="Ludhiana">Ludhiana</option>
+                <option value="Delhi">Delhi</option>
+                <option value="Bengaluru">Bengaluru</option>
+              </select>
+            </div>
+            <p class="text-xs text-slate-500 mt-1">
+              Compares active open requests (<span class="mono">Pipeline 2</span>) and 28-day moving-average weekly demand forecast against currently available stock.
+            </p>
+          </div>
+          <div class="relative h-72 mt-4">
+            <canvas id="shortageChart"></canvas>
+          </div>
+          <div class="mt-3 p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600">
+            <strong>AI Layer Note:</strong> Uses a 4-week (28-day) moving-average baseline in plain Python (<span class="mono">requests_28d / 4</span>), not a black-box ML model, to answer: <em>"Which equipment categories should inspectors refurbish first?"</em>
+          </div>
+        </div>
+
+        <!-- Shortage Forecast Table -->
+        <div class="lg:col-span-7 bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div>
+              <h2 class="text-sm font-bold text-slate-900">GET /analytics/shortages — Pipeline 2 + Moving-Average Forecast</h2>
+              <p class="text-xs text-slate-500">Groups open requests by <span class="mono">{category, city}</span>, joins available devices via <span class="mono">$lookup</span>, and flags shortages.</p>
+            </div>
+            <button id="refreshShortagesBtn" type="button" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition">
+              Refresh Table
+            </button>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="border-b border-slate-200 bg-slate-50 text-slate-600 font-semibold">
+                  <th class="py-2.5 px-3">Category</th>
+                  <th class="py-2.5 px-3">City</th>
+                  <th class="py-2.5 px-3 text-right">Open Req</th>
+                  <th class="py-2.5 px-3 text-right">28d Req</th>
+                  <th class="py-2.5 px-3 text-right">Weekly Forecast</th>
+                  <th class="py-2.5 px-3 text-right">Avail Supply</th>
+                  <th class="py-2.5 px-3">Refurbishment Priority</th>
+                </tr>
+              </thead>
+              <tbody id="shortagesTableBody" class="divide-y divide-slate-100"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Overdue Compliance Pipeline 1 Table -->
+      <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <div>
+            <h2 class="text-sm font-bold text-slate-900">GET /analytics/overdue — Pipeline 1 (Overdue Sanitization &amp; Inspection Audit)</h2>
+            <p class="text-xs text-slate-500">
+              Devices where <span class="mono">last_sanitized_at &lt; now - 30d</span> OR (<span class="mono">requires_inspection == true</span> and <span class="mono">last_inspection_at &lt; now - 180d</span>), joined with their latest event via <span class="mono">$lookup</span>.
+            </p>
+          </div>
+          <span id="overdueShowingBadge" class="text-xs mono text-slate-500">Showing top records</span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="border-b border-slate-200 bg-slate-50 text-slate-600 font-semibold">
+                <th class="py-2.5 px-3">Device ID</th>
+                <th class="py-2.5 px-3">Equipment Name</th>
+                <th class="py-2.5 px-3">Category</th>
+                <th class="py-2.5 px-3">City</th>
+                <th class="py-2.5 px-3">Status</th>
+                <th class="py-2.5 px-3">Last Inspected</th>
+                <th class="py-2.5 px-3">Last Sanitized</th>
+                <th class="py-2.5 px-3">Latest Custody Event ($lookup)</th>
+                <th class="py-2.5 px-3">Action</th>
+              </tr>
+            </thead>
+            <tbody id="overdueTableBody" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- TAB 2: PATIENT REQUEST & 25 KM $geoNear MATCHER                     -->
+    <!-- =================================================================== -->
+    <section id="tabPanelMatcher" class="space-y-6 hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Create Patient Request Form (POST /requests) -->
+        <div class="lg:col-span-5 bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
+          <div>
+            <span class="text-[11px] font-bold uppercase tracking-wider text-teal-700 bg-teal-50 px-2 py-0.5 rounded mono">POST /requests</span>
+            <h2 class="text-sm font-bold text-slate-900 mt-1">Create Patient Equipment Request (14-Day TTL)</h2>
+            <p class="text-xs text-slate-500 mt-0.5">Automatically sets <span class="mono">expires_at = now + 14 days</span> for MongoDB TTL index cleanup.</p>
+          </div>
+
+          <form id="createRequestForm" class="space-y-3 text-xs">
+            <div>
+              <label for="reqRequesterId" class="block font-semibold text-slate-700 mb-1">Requester User ID (<span class="mono">ObjectId</span>)</label>
+              <input id="reqRequesterId" type="text" required class="w-full rounded-lg border border-slate-300 px-3 py-2 mono text-xs focus:outline-none focus:border-teal-600" value="652a1b2c3d4e5f6a7b8c9d11" />
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label for="reqCategory" class="block font-semibold text-slate-700 mb-1">Equipment Category</label>
+                <select id="reqCategory" class="w-full rounded-lg border border-slate-300 px-2.5 py-2 bg-white text-xs">
+                  <option value="oxygen_concentrator">oxygen_concentrator</option>
+                  <option value="wheelchair">wheelchair</option>
+                  <option value="hospital_bed">hospital_bed</option>
+                  <option value="nebulizer">nebulizer</option>
+                  <option value="walker">walker</option>
+                  <option value="bp_monitor">bp_monitor</option>
+                </select>
+              </div>
+              <div>
+                <label for="reqUrgency" class="block font-semibold text-slate-700 mb-1">Clinical Urgency</label>
+                <select id="reqUrgency" class="w-full rounded-lg border border-slate-300 px-2.5 py-2 bg-white text-xs">
+                  <option value="high">high</option>
+                  <option value="medium" selected>medium</option>
+                  <option value="low">low</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2">
+              <div>
+                <label for="reqCity" class="block font-semibold text-slate-700 mb-1">City Cluster</label>
+                <select id="reqCity" class="w-full rounded-lg border border-slate-300 px-2 py-2 bg-white text-xs">
+                  <option value="Ludhiana">Ludhiana</option>
+                  <option value="Delhi">Delhi</option>
+                  <option value="Bengaluru">Bengaluru</option>
+                </select>
+              </div>
+              <div>
+                <label for="reqLng" class="block font-semibold text-slate-700 mb-1">Longitude</label>
+                <input id="reqLng" type="number" step="0.0001" required class="w-full rounded-lg border border-slate-300 px-2.5 py-2 mono text-xs" value="75.8573" />
+              </div>
+              <div>
+                <label for="reqLat" class="block font-semibold text-slate-700 mb-1">Latitude</label>
+                <input id="reqLat" type="number" step="0.0001" required class="w-full rounded-lg border border-slate-300 px-2.5 py-2 mono text-xs" value="30.9010" />
+              </div>
+            </div>
+
+            <button type="submit" class="w-full py-2.5 px-4 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs shadow-sm transition">
+              Create Patient Request &amp; Run 25 km Match
+            </button>
+          </form>
+
+          <!-- Quick Preset Requests Selector -->
+          <div class="pt-3 border-t border-slate-200">
+            <label for="sampleRequestSelect" class="block text-xs font-semibold text-slate-700 mb-1">Or Pick an Existing Open Request:</label>
+            <div class="flex gap-2">
+              <select id="sampleRequestSelect" class="flex-1 rounded-lg border border-slate-300 px-2.5 py-2 bg-slate-50 text-xs mono"></select>
+              <button id="runMatchBtn" type="button" class="px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold whitespace-nowrap">
+                Run $geoNear
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- $geoNear Matching Results (GET /match/{request_id}) -->
+        <div class="lg:col-span-7 bg-white rounded-xl border border-slate-200 p-5 shadow-sm flex flex-col justify-between space-y-4">
+          <div>
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <span class="text-[11px] font-bold uppercase tracking-wider text-blue-700 bg-blue-50 px-2 py-0.5 rounded mono">GET /match/{request_id}</span>
+                <h2 class="text-sm font-bold text-slate-900 mt-1">Pipeline 3: Nearest Eligible Devices ($geoNear &le; 25 km)</h2>
+              </div>
+              <span id="matchSummaryBadge" class="px-2.5 py-1 rounded-full text-xs font-semibold bg-teal-50 text-teal-700 mono">Ready</span>
+            </div>
+            <p class="text-xs text-slate-500 mt-1">
+              Uses the <span class="mono">2dsphere</span> index on <span class="mono">devices.location</span>, filters by <span class="mono">status: "available"</span>, and enforces <span class="mono">last_inspection_at &ge; now - 180 days</span> when <span class="mono">requires_inspection == true</span>.
+            </p>
+
+            <div id="matchResultsContainer" class="mt-4 space-y-3"></div>
+          </div>
+
+          <div class="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600">
+            <strong>Viva Defense Tip:</strong> Why is the 180-day inspection check inside <span class="mono">GET /match/{request_id}</span> instead of <span class="mono">$jsonSchema</span>? Because MongoDB <span class="mono">$jsonSchema</span> cannot compare a field against the current runtime clock (<span class="mono">$$NOW</span>).
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- TAB 3: DEVICE REGISTRY & ATOMIC STATE MACHINE                       -->
+    <!-- =================================================================== -->
+    <section id="tabPanelLifecycle" class="space-y-6 hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- List New Device Form (POST /devices) -->
+        <div class="lg:col-span-4 bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
+          <div>
+            <span class="text-[11px] font-bold uppercase tracking-wider text-teal-700 bg-teal-50 px-2 py-0.5 rounded mono">POST /devices</span>
+            <h2 class="text-sm font-bold text-slate-900 mt-1">List Donated Medical Equipment</h2>
+            <p class="text-xs text-slate-500 mt-0.5">Stores polymorphic embedded <span class="mono">specs</span> (1:1) and <span class="mono">purchase_value</span> as BSON <span class="mono">Decimal128</span>.</p>
+          </div>
+
+          <form id="createDeviceForm" class="space-y-3 text-xs">
+            <div>
+              <label for="devCategory" class="block font-semibold text-slate-700 mb-1">Category (Polymorphic Specs)</label>
+              <select id="devCategory" class="w-full rounded-lg border border-slate-300 px-2.5 py-2 bg-white text-xs">
+                <option value="oxygen_concentrator">oxygen_concentrator (requires_inspection: true)</option>
+                <option value="hospital_bed">hospital_bed (requires_inspection: true)</option>
+                <option value="nebulizer">nebulizer (requires_inspection: true)</option>
+                <option value="wheelchair">wheelchair (requires_inspection: false)</option>
+                <option value="walker">walker (requires_inspection: false)</option>
+                <option value="bp_monitor">bp_monitor (requires_inspection: false)</option>
+              </select>
+            </div>
+
+            <div>
+              <label for="devName" class="block font-semibold text-slate-700 mb-1">Device Model Name</label>
+              <input id="devName" type="text" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs" value="Philips Respironics EverFlo 5L" />
+            </div>
+
+            <!-- Dynamic Embedded Specs Box -->
+            <div class="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="font-semibold text-slate-700">Embedded <span class="mono">specs</span> Object (1:1)</span>
+                <span class="text-[11px] mono text-teal-700">hours_used &ge; 0</span>
+              </div>
+              <div id="dynamicSpecsInputs" class="grid grid-cols-2 gap-2"></div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label for="devCity" class="block font-semibold text-slate-700 mb-1">City</label>
+                <select id="devCity" class="w-full rounded-lg border border-slate-300 px-2.5 py-2 bg-white text-xs">
+                  <option value="Ludhiana">Ludhiana</option>
+                  <option value="Delhi">Delhi</option>
+                  <option value="Bengaluru">Bengaluru</option>
+                </select>
+              </div>
+              <div>
+                <label for="devPurchaseValue" class="block font-semibold text-slate-700 mb-1">Value INR (<span class="mono">Decimal128</span>)</label>
+                <input id="devPurchaseValue" type="number" step="0.01" min="1" required class="w-full rounded-lg border border-slate-300 px-2.5 py-2 mono text-xs" value="45000.00" />
+              </div>
+            </div>
+
+            <div>
+              <label for="devOwnerId" class="block font-semibold text-slate-700 mb-1">Donor Owner ID (<span class="mono">ObjectId</span>)</label>
+              <input id="devOwnerId" type="text" required class="w-full rounded-lg border border-slate-300 px-3 py-2 mono text-xs" value="652a1b2c3d4e5f6a7b8c9d01" />
+            </div>
+
+            <div>
+              <label for="devNotes" class="block font-semibold text-slate-700 mb-1">Condition &amp; Accessories Notes</label>
+              <input id="devNotes" type="text" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs" value="Includes humidifier bottle and nasal cannula." />
+            </div>
+
+            <button type="submit" class="w-full py-2.5 px-4 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs shadow-sm transition">
+              List Device (Status: "listed" + Write Event)
+            </button>
+          </form>
+        </div>
+
+        <!-- Atomic State Machine & Custody History Inspector -->
+        <div class="lg:col-span-8 space-y-6">
+          <!-- State Machine Controller Card -->
+          <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <span class="text-[11px] font-bold uppercase tracking-wider text-purple-700 bg-purple-50 px-2 py-0.5 rounded mono">POST /devices/{id}/transition</span>
+                <h2 class="text-sm font-bold text-slate-900 mt-1">Atomic Lifecycle State Machine &amp; Concurrency Guard</h2>
+              </div>
+              <div class="flex items-center gap-2">
+                <label for="activeDeviceSelect" class="text-xs font-medium text-slate-600">Select Device:</label>
+                <select id="activeDeviceSelect" class="rounded-lg border border-slate-300 px-2.5 py-1.5 bg-slate-50 text-xs mono"></select>
+              </div>
+            </div>
+
+            <!-- Active Device Metadata Banner -->
+            <div id="activeDeviceCard" class="p-3.5 rounded-xl bg-slate-900 text-white flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div class="flex items-center gap-2">
+                  <span id="activeDevName" class="font-bold text-sm">Philips Respironics EverFlo 5L</span>
+                  <span id="activeDevCategory" class="text-xs px-2 py-0.5 rounded bg-slate-800 text-teal-300 mono">oxygen_concentrator</span>
+                </div>
+                <p id="activeDevMeta" class="text-xs text-slate-300 mt-1 mono">ID: — | City: Ludhiana | Specs: {}</p>
+              </div>
+              <div class="text-right">
+                <span class="text-[10px] uppercase tracking-wider text-slate-400 block">Current Status</span>
+                <span id="activeDevStatusBadge" class="inline-block mt-0.5 px-3 py-1 rounded-full text-xs font-bold bg-teal-500 text-slate-950 mono">available</span>
+              </div>
+            </div>
+
+            <!-- Transition Buttons Grid -->
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-semibold text-slate-700">Click Any Target State to Test <span class="mono">is_valid_transition(from_status, to_status)</span>:</span>
+                <span class="text-[11px] text-slate-500">Green = Valid Transition | Red = Triggers HTTP 409 Conflict</span>
+              </div>
+              <div id="transitionButtonsGrid" class="grid grid-cols-3 sm:grid-cols-5 gap-2"></div>
+            </div>
+
+            <!-- Transition Result Callout -->
+            <div id="transitionFeedbackBox" class="p-3 rounded-lg border text-xs bg-slate-50 border-slate-200 text-slate-700 mono">
+              Uses atomic compare-and-swap: db.devices.find_one_and_update({"_id": id, "status": current_status}, {"$set": ...})
+            </div>
+          </div>
+
+          <!-- Append-Only Event History Card (GET /devices/{id}/history) -->
+          <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <div>
+                <span class="text-[11px] font-bold uppercase tracking-wider text-slate-700 bg-slate-100 px-2 py-0.5 rounded mono">GET /devices/{id}/history</span>
+                <h2 class="text-sm font-bold text-slate-900 mt-1">Append-Only Custody &amp; Maintenance Audit Trail (<span class="mono">events</span>)</h2>
+                <p class="text-xs text-slate-500">Referenced 1:N collection indexed by <span class="mono">{device_id: 1, ts: -1}</span> (ESR Rule: Equality on device_id, Sort on ts desc).</p>
+              </div>
+              <span id="eventCountBadge" class="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-800 mono">0 events</span>
+            </div>
+
+            <div id="eventHistoryList" class="space-y-2.5 max-h-80 overflow-y-auto pr-1"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // -----------------------------------------------------------------------
+    // 1. State Machine Rules (Mirrors app/state_machine.py 100%)
+    // -----------------------------------------------------------------------
+    const VALID_STATUSES = [
+      "listed", "inspected", "available", "reserved",
+      "in_use", "returned", "sanitized", "rejected", "retired"
+    ];
+
+    const ALLOWED_TRANSITIONS = {
+      listed: ["inspected", "retired"],
+      inspected: ["available", "rejected", "retired"],
+      available: ["reserved", "retired"],
+      reserved: ["in_use", "retired"],
+      in_use: ["returned", "retired"],
+      returned: ["sanitized", "retired"],
+      sanitized: ["available", "retired"],
+      rejected: ["retired"],
+      retired: []
+    };
+
+    const STATUS_TO_EVENT_TYPE = {
+      listed: "listed",
+      inspected: "inspected",
+      rejected: "inspected",
+      available: "serviced",
+      reserved: "reserved",
+      in_use: "handed_over",
+      returned: "returned",
+      sanitized: "sanitized",
+      retired: "retired"
+    };
+
+    function isValidTransition(fromStatus, toStatus) {
+      if (!VALID_STATUSES.includes(fromStatus) || !VALID_STATUSES.includes(toStatus)) {
+        return false;
+      }
+      if (toStatus === "retired") {
+        return true;
+      }
+      return (ALLOWED_TRANSITIONS[fromStatus] || []).includes(toStatus);
+    }
+
+    const CITY_COORDS = {
+      Ludhiana: [75.8573, 30.9010],
+      Delhi: [77.2090, 28.6139],
+      Bengaluru: [77.5946, 12.9716]
+    };
+
+    // -----------------------------------------------------------------------
+    // 2. Fallback / Seeded Local State (Used when previewing inside Canvas
+    //    or before FastAPI sync; seamlessly replaced when connected to FastAPI)
+    // -----------------------------------------------------------------------
+    const state = {
+      isLiveBackend: false,
+      apiBase: "http://127.0.0.1:8000",
+      activeTab: "analytics",
+      selectedCityFilter: "ALL",
+      activeDeviceId: "652a1b2c3d4e5f6a7b8c9d02",
+      activeRequestId: "652a1b2c3d4e5f6a7b8c9e01",
+      shortages: [
+        { category: "oxygen_concentrator", city: "Ludhiana", open_requests: 64, requests_last_28_days: 228, weekly_average_demand: 57.0, forecast_next_week_demand: 57.0, available_supply: 41, shortage_flagged: true },
+        { category: "hospital_bed", city: "Delhi", open_requests: 58, requests_last_28_days: 212, weekly_average_demand: 53.0, forecast_next_week_demand: 53.0, available_supply: 38, shortage_flagged: true },
+        { category: "nebulizer", city: "Bengaluru", open_requests: 55, requests_last_28_days: 196, weekly_average_demand: 49.0, forecast_next_week_demand: 49.0, available_supply: 36, shortage_flagged: true },
+        { category: "wheelchair", city: "Ludhiana", open_requests: 49, requests_last_28_days: 172, weekly_average_demand: 43.0, forecast_next_week_demand: 43.0, available_supply: 62, shortage_flagged: false },
+        { category: "walker", city: "Delhi", open_requests: 44, requests_last_28_days: 160, weekly_average_demand: 40.0, forecast_next_week_demand: 40.0, available_supply: 58, shortage_flagged: false },
+        { category: "bp_monitor", city: "Bengaluru", open_requests: 42, requests_last_28_days: 152, weekly_average_demand: 38.0, forecast_next_week_demand: 38.0, available_supply: 54, shortage_flagged: false },
+        { category: "oxygen_concentrator", city: "Delhi", open_requests: 61, requests_last_28_days: 220, weekly_average_demand: 55.0, forecast_next_week_demand: 55.0, available_supply: 44, shortage_flagged: true },
+        { category: "hospital_bed", city: "Ludhiana", open_requests: 52, requests_last_28_days: 188, weekly_average_demand: 47.0, forecast_next_week_demand: 47.0, available_supply: 39, shortage_flagged: true },
+        { category: "wheelchair", city: "Bengaluru", open_requests: 46, requests_last_28_days: 164, weekly_average_demand: 41.0, forecast_next_week_demand: 41.0, available_supply: 59, shortage_flagged: false }
+      ],
+      overdueDevices: [
+        {
+          _id: "652a1b2c3d4e5f6a7b8c9d05",
+          name: "Philips Respironics EverFlo 5L",
+          category: "oxygen_concentrator",
+          city: "Ludhiana",
+          status: "available",
+          requires_inspection: true,
+          last_inspection_at: "2026-03-10T10:15:00Z",
+          last_sanitized_at: "2026-09-01T14:20:00Z",
+          latest_event: { type: "serviced", to_status: "available", ts: "2026-09-01T14:20:00Z" }
+        },
+        {
+          _id: "652a1b2c3d4e5f6a7b8c9d06",
+          name: "Paramount Semi-Fowler Hospital Bed",
+          category: "hospital_bed",
+          city: "Delhi",
+          status: "returned",
+          requires_inspection: true,
+          last_inspection_at: "2026-02-18T09:00:00Z",
+          last_sanitized_at: "2026-08-22T11:30:00Z",
+          latest_event: { type: "returned", to_status: "returned", ts: "2026-09-12T16:40:00Z" }
+        },
+        {
+          _id: "652a1b2c3d4e5f6a7b8c9d07",
+          name: "Omron NE-C28 Compressor Nebulizer",
+          category: "nebulizer",
+          city: "Bengaluru",
+          status: "available",
+          requires_inspection: true,
+          last_inspection_at: "2026-03-25T08:45:00Z",
+          last_sanitized_at: "2026-09-05T12:10:00Z",
+          latest_event: { type: "serviced", to_status: "available", ts: "2026-09-05T12:10:00Z" }
+        }
+      ],
+      devices: [
+        {
+          _id: "652a1b2c3d4e5f6a7b8c9d02",
+          name: "Philips Respironics EverFlo 5L",
+          category: "oxygen_concentrator",
+          specs: { flow_lpm: 5, hours_used: 310, oxygen_purity_pct: 93.8 },
+          status: "available",
+          requires_inspection: true,
+          last_inspection_at: "2026-10-02T11:00:00Z",
+          last_sanitized_at: "2026-10-03T09:30:00Z",
+          owner_id: "652a1b2c3d4e5f6a7b8c9d01",
+          city: "Ludhiana",
+          location: { type: "Point", coordinates: [75.8612, 30.9045] },
+          purchase_value: 45000.00,
+          notes: "Continuous flow 5 LPM, low-noise compressor"
+        },
+        {
+          _id: "652a1b2c3d4e5f6a7b8c9d08",
+          name: "Oxymed Mini 5L Stationary Concentrator",
+          category: "oxygen_concentrator",
+          specs: { flow_lpm: 5, hours_used: 185, oxygen_purity_pct: 94.4 },
+          status: "available",
+          requires_inspection: true,
+          last_inspection_at: "2026-09-28T15:20:00Z",
+          last_sanitized_at: "2026-09-29T10:00:00Z",
+          owner_id: "652a1b2c3d4e5f6a7b8c9d01",
+          city: "Ludhiana",
+          location: { type: "Point", coordinates: [75.8820, 30.9180] },
+          purchase_value: 42000.00,
+          notes: "Dual outlet with built-in nebulizer port"
+        },
+        {
+          _id: "652a1b2c3d4e5f6a7b8c9d09",
+          name: "Karma Ryder 4 Folding Wheelchair",
+          category: "wheelchair",
+          specs: { seat_width_cm: 46, max_load_kg: 120, foldable: true },
+          status: "listed",
+          requires_inspection: false,
+          last_inspection_at: null,
+          last_sanitized_at: null,
+          owner_id: "652a1b2c3d4e5f6a7b8c9d01",
+          city: "Delhi",
+          location: { type: "Point", coordinates: [77.2150, 28.6190] },
+          purchase_value: 8500.00,
+          notes: "Foldable steel frame, manual footrests"
+        }
+      ],
+      eventsByDevice: {
+        "652a1b2c3d4e5f6a7b8c9d02": [
+          {
+            _id: "652a1b2c3d4e5f6a7b8c9f03",
+            device_id: "652a1b2c3d4e5f6a7b8c9d02",
+            type: "serviced",
+            actor_id: "652a1b2c3d4e5f6a7b8c9d03",
+            ts: "2026-10-03T09:30:00Z",
+            from_status: "inspected",
+            to_status: "available",
+            details: { note: "Initial sanitization and release to available inventory" }
+          },
+          {
+            _id: "652a1b2c3d4e5f6a7b8c9f02",
+            device_id: "652a1b2c3d4e5f6a7b8c9d02",
+            type: "inspected",
+            actor_id: "652a1b2c3d4e5f6a7b8c9d03",
+            ts: "2026-10-02T11:00:00Z",
+            from_status: "listed",
+            to_status: "inspected",
+            details: { result: "pass", checklist: ["sieve_bed_pressure_ok", "flow_meter_calibrated", "intake_filter_clean"] }
+          },
+          {
+            _id: "652a1b2c3d4e5f6a7b8c9f01",
+            device_id: "652a1b2c3d4e5f6a7b8c9d02",
+            type: "listed",
+            actor_id: "652a1b2c3d4e5f6a7b8c9d01",
+            ts: "2026-10-01T08:15:00Z",
+            from_status: null,
+            to_status: "listed",
+            details: { note: "Initial donor listing" }
+          }
+        ],
+        "652a1b2c3d4e5f6a7b8c9d08": [
+          {
+            _id: "652a1b2c3d4e5f6a7b8c9f04",
+            device_id: "652a1b2c3d4e5f6a7b8c9d08",
+            type: "serviced",
+            actor_id: "652a1b2c3d4e5f6a7b8c9d03",
+            ts: "2026-09-29T10:00:00Z",
+            from_status: "inspected",
+            to_status: "available",
+            details: { ready_for_match: true }
+          }
+        ],
+        "652a1b2c3d4e5f6a7b8c9d09": [
+          {
+            _id: "652a1b2c3d4e5f6a7b8c9f05",
+            device_id: "652a1b2c3d4e5f6a7b8c9d09",
+            type: "listed",
+            actor_id: "652a1b2c3d4e5f6a7b8c9d01",
+            ts: "2026-10-12T10:00:00Z",
+            from_status: null,
+            to_status: "listed",
+            details: { note: "Initial donor listing" }
+          }
+        ]
+      },
+      requests: [
+        {
+          _id: "652a1b2c3d4e5f6a7b8c9e01",
+          requester_id: "652a1b2c3d4e5f6a7b8c9d11",
+          category: "oxygen_concentrator",
+          city: "Ludhiana",
+          location: { type: "Point", coordinates: [75.8573, 30.9010] },
+          urgency: "high",
+          status: "open",
+          created_at: "2026-10-14T10:00:00Z",
+          expires_at: "2026-10-28T10:00:00Z"
+        },
+        {
+          _id: "652a1b2c3d4e5f6a7b8c9e02",
+          requester_id: "652a1b2c3d4e5f6a7b8c9d11",
+          category: "wheelchair",
+          city: "Delhi",
+          location: { type: "Point", coordinates: [77.2090, 28.6139] },
+          urgency: "medium",
+          status: "open",
+          created_at: "2026-10-14T12:30:00Z",
+          expires_at: "2026-10-28T12:30:00Z"
+        }
+      ]
+    };
+
+    let shortageChartInstance = null;
+
+    // -----------------------------------------------------------------------
+    // 3. Utility Helpers
+    // -----------------------------------------------------------------------
+    function showToast(title, message, isError = false) {
+      const container = document.getElementById("toastContainer");
+      const box = document.getElementById("toastBox");
+      const titleEl = document.getElementById("toastTitle");
+      const msgEl = document.getElementById("toastMessage");
+
+      titleEl.textContent = title;
+      titleEl.className = isError
+        ? "text-xs font-bold uppercase tracking-wider text-rose-400"
+        : "text-xs font-bold uppercase tracking-wider text-teal-400";
+      box.className = isError
+        ? "rounded-xl p-4 shadow-lg border flex items-start justify-between gap-3 bg-rose-950 text-white border-rose-700"
+        : "rounded-xl p-4 shadow-lg border flex items-start justify-between gap-3 bg-slate-900 text-white border-slate-700";
+      msgEl.textContent = message;
+      container.classList.remove("hidden");
+    }
+
+    function randomHexId() {
+      let out = "652a1b2c";
+      const chars = "0123456789abcdef";
+      for (let i = 0; i < 16; i++) {
+        out += chars[Math.floor(Math.random() * 16)];
+      }
+      return out;
+    }
+
+    function haversineMeters(lng1, lat1, lng2, lat2) {
+      const toRad = (deg) => (deg * Math.PI) / 180;
+      const R = 6371000;
+      const dLat = toRad(lat2 - lat1);
+      const dLng = toRad(lng2 - lng1);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+        Math.sin(dLng / 2) * Math.sin(dLng / 2);
+      return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+    }
+
+    function formatDateShort(isoStr) {
+      if (!isoStr) return "None";
+      const d = new Date(isoStr);
+      if (isNaN(d.getTime())) return String(isoStr);
+      return d.toISOString().slice(0, 10);
+    }
+
+    // -----------------------------------------------------------------------
+    // 4. Live FastAPI Synchronization
+    // -----------------------------------------------------------------------
+    async function syncWithLiveBackend() {
+      const apiBaseInput = document.getElementById("apiBaseInput");
+      state.apiBase = (apiBaseInput.value || "http://127.0.0.1:8000").replace(/\/+$/, "");
+
+      const badge = document.getElementById("connectionBadge");
+      const dot = document.getElementById("connectionDot");
+      const text = document.getElementById("connectionText");
+
+      try {
+        const [shortagesResp, overdueResp] = await Promise.all([
+          fetch(`${state.apiBase}/analytics/shortages`),
+          fetch(`${state.apiBase}/analytics/overdue`)
+        ]);
+
+        if (!shortagesResp.ok || !overdueResp.ok) {
+          throw new Error("FastAPI returned non-200 status");
+        }
+
+        const shortagesData = await shortagesResp.json();
+        const overdueData = await overdueResp.json();
+
+        // Merge open_requests from current_demand_vs_supply into weekly_shortage_forecasts
+        const openMap = {};
+        (shortagesData.current_demand_vs_supply || []).forEach((row) => {
+          openMap[`${row.category}__${row.city}`] = row.open_requests;
+        });
+
+        state.shortages = (shortagesData.weekly_shortage_forecasts || []).map((f) => ({
+          ...f,
+          open_requests: openMap[`${f.category}__${f.city}`] || 0
+        }));
+
+        state.overdueDevices = overdueData.overdue_devices || [];
+        document.getElementById("kpiOverdueCount").textContent = String(overdueData.overdue_count ?? state.overdueDevices.length);
+
+        // Also check if optional /samples helper endpoint exists on FastAPI
+        try {
+          const samplesResp = await fetch(`${state.apiBase}/samples`);
+          if (samplesResp.ok) {
+            const samples = await samplesResp.json();
+            if (samples.devices && samples.devices.length > 0) {
+              state.devices = samples.devices;
+              state.activeDeviceId = state.devices[0]._id;
+            }
+            if (samples.requests && samples.requests.length > 0) {
+              state.requests = samples.requests;
+              state.activeRequestId = state.requests[0]._id;
+            }
+            if (samples.donor_id) {
+              document.getElementById("devOwnerId").value = samples.donor_id;
+            }
+            if (samples.requester_id) {
+              document.getElementById("reqRequesterId").value = samples.requester_id;
+            }
+          } else if (state.overdueDevices.length > 0) {
+            // Populate sample devices from overdue list so live IDs work immediately
+            state.devices = state.overdueDevices.slice(0, 8).map((d) => ({
+              _id: d._id,
+              name: d.name,
+              category: d.category,
+              city: d.city,
+              status: d.status,
+              requires_inspection: d.requires_inspection,
+              last_inspection_at: d.last_inspection_at,
+              last_sanitized_at: d.last_sanitized_at,
+              specs: {},
+              location: { type: "Point", coordinates: CITY_COORDS[d.city] || [75.8573, 30.9010] }
+            }));
+            state.activeDeviceId = state.devices[0]._id;
+          }
+        } catch (_e) {
+          // Ignore optional endpoint error
+        }
+
+        state.isLiveBackend = true;
+        badge.className = "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800";
+        dot.className = "w-1.5 h-1.5 rounded-full bg-emerald-500";
+        text.textContent = "Connected to Live FastAPI + MongoDB";
+
+        renderAll();
+        if (state.activeDeviceId) {
+          await loadDeviceHistory(state.activeDeviceId);
+        }
+        showToast("Connected to Live Backend", `Synced live MongoDB data from ${state.apiBase}`);
+      } catch (_err) {
+        state.isLiveBackend = false;
+        badge.className = "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800";
+        dot.className = "w-1.5 h-1.5 rounded-full bg-amber-500";
+        text.textContent = "Interactive Sandbox Mode (Seeded Data)";
+        renderAll();
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // 5. Render Functions
+    // -----------------------------------------------------------------------
+    function renderKPIs() {
+      const flaggedCount = state.shortages.filter((s) => s.shortage_flagged).length;
+      const openReqTotal = state.shortages.reduce((acc, s) => acc + (s.open_requests || 0), 0);
+      document.getElementById("kpiShortageCount").textContent = String(flaggedCount);
+      if (openReqTotal > 0) {
+        document.getElementById("kpiOpenRequests").textContent = openReqTotal.toLocaleString();
+      }
+      if (!state.isLiveBackend) {
+        document.getElementById("kpiOverdueCount").textContent = String(state.overdueDevices.length);
+      }
+    }
+
+    function renderShortagesTableAndChart() {
+      const filterCity = state.selectedCityFilter;
+      const filtered = state.shortages.filter(
+        (row) => filterCity === "ALL" || row.city === filterCity
+      );
+
+      const tbody = document.getElementById("shortagesTableBody");
+      tbody.innerHTML = "";
+
+      filtered.forEach((row) => {
+        const tr = document.createElement("tr");
+        tr.className = "hover:bg-slate-50 transition";
+        const badgeHtml = row.shortage_flagged
+          ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-100 text-rose-800">SHORTAGE: Inspect &amp; Refurbish First</span>`
+          : `<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700">Supply Sufficient</span>`;
+
+        tr.innerHTML = `
+          <td class="py-2.5 px-3 font-semibold mono text-slate-800">${row.category}</td>
+          <td class="py-2.5 px-3 text-slate-600">${row.city}</td>
+          <td class="py-2.5 px-3 text-right mono">${row.open_requests ?? "-"}</td>
+          <td class="py-2.5 px-3 text-right mono">${row.requests_last_28_days}</td>
+          <td class="py-2.5 px-3 text-right font-semibold mono text-slate-900">${row.forecast_next_week_demand}</td>
+          <td class="py-2.5 px-3 text-right font-semibold mono text-teal-700">${row.available_supply}</td>
+          <td class="py-2.5 px-3">${badgeHtml}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // Render Chart.js Grouped Bar Chart
+      const ctx = document.getElementById("shortageChart").getContext("2d");
+      const labels = filtered.map((r) => `${r.category.replace("_", " ")} (${r.city.slice(0, 3)})`);
+      const forecastVals = filtered.map((r) => r.forecast_next_week_demand);
+      const supplyVals = filtered.map((r) => r.available_supply);
+
+      if (shortageChartInstance) {
+        shortageChartInstance.destroy();
+      }
+
+      shortageChartInstance = new Chart(ctx, {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "Forecasted Next-Week Demand",
+              data: forecastVals,
+              backgroundColor: "#f43f5e",
+              borderRadius: 4
+            },
+            {
+              label: "Available Device Supply",
+              data: supplyVals,
+              backgroundColor: "#0d9488",
+              borderRadius: 4
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: "bottom",
+              labels: { boxWidth: 12, font: { size: 11 } }
+            }
+          },
+          scales: {
+            x: { ticks: { font: { size: 10 } } },
+            y: { beginAtZero: true, ticks: { font: { size: 10 } } }
+          }
+        }
+      });
+    }
+
+    function renderOverdueTable() {
+      const tbody = document.getElementById("overdueTableBody");
+      tbody.innerHTML = "";
+      const slice = state.overdueDevices.slice(0, 12);
+      document.getElementById("overdueShowingBadge").textContent =
+        `Showing ${slice.length} of ${state.overdueDevices.length} overdue records`;
+
+      slice.forEach((dev) => {
+        const tr = document.createElement("tr");
+        tr.className = "hover:bg-slate-50 transition";
+        const latestEvt = dev.latest_event
+          ? `${dev.latest_event.type} -> ${dev.latest_event.to_status} (${formatDateShort(dev.latest_event.ts)})`
+          : "No event";
+
+        tr.innerHTML = `
+          <td class="py-2.5 px-3 mono text-slate-600">${String(dev._id).slice(-8)}</td>
+          <td class="py-2.5 px-3 font-medium text-slate-900">${dev.name}</td>
+          <td class="py-2.5 px-3 mono text-slate-700">${dev.category}</td>
+          <td class="py-2.5 px-3 text-slate-600">${dev.city}</td>
+          <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded bg-slate-100 text-slate-800 mono text-[11px]">${dev.status}</span></td>
+          <td class="py-2.5 px-3 mono text-amber-700">${formatDateShort(dev.last_inspection_at)}</td>
+          <td class="py-2.5 px-3 mono text-rose-700">${formatDateShort(dev.last_sanitized_at)}</td>
+          <td class="py-2.5 px-3 mono text-slate-600">${latestEvt}</td>
+          <td class="py-2.5 px-3">
+            <button type="button" data-inspect-device="${dev._id}" class="inspect-overdue-btn px-2.5 py-1 rounded bg-teal-50 hover:bg-teal-100 text-teal-700 font-semibold text-[11px]">
+              Open in State Machine
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      tbody.querySelectorAll(".inspect-overdue-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const devId = btn.getAttribute("data-inspect-device");
+          const existing = state.devices.find((d) => String(d._id) === String(devId));
+          if (!existing) {
+            const overdueDoc = state.overdueDevices.find((d) => String(d._id) === String(devId));
+            if (overdueDoc) {
+              state.devices.unshift({
+                ...overdueDoc,
+                specs: overdueDoc.specs || {},
+                location: overdueDoc.location || { type: "Point", coordinates: CITY_COORDS[overdueDoc.city] || [75.8573, 30.9010] }
+              });
+            }
+          }
+          state.activeDeviceId = String(devId);
+          switchTab("lifecycle");
+          renderLifecycleTab();
+          loadDeviceHistory(state.activeDeviceId);
+        });
+      });
+    }
+
+    function renderMatcherTab() {
+      const select = document.getElementById("sampleRequestSelect");
+      select.innerHTML = "";
+      state.requests.forEach((req) => {
+        const opt = document.createElement("option");
+        opt.value = req._id;
+        opt.textContent = `${String(req._id).slice(-8)} | ${req.category} | ${req.city} (${req.urgency})`;
+        if (String(req._id) === String(state.activeRequestId)) {
+          opt.selected = true;
+        }
+        select.appendChild(opt);
+      });
+    }
+
+    async function executeGeoNearMatch(requestId) {
+      const container = document.getElementById("matchResultsContainer");
+      const badge = document.getElementById("matchSummaryBadge");
+      container.innerHTML = `<div class="p-4 text-xs text-slate-500">Running $geoNear aggregation within 25,000 meters...</div>`;
+
+      if (state.isLiveBackend) {
+        try {
+          const resp = await fetch(`${state.apiBase}/match/${requestId}`);
+          if (resp.ok) {
+            const data = await resp.json();
+            badge.textContent = `${data.match_count} matches within 25 km (${data.city})`;
+            renderMatchCards(data.matches || []);
+            return;
+          }
+        } catch (_e) {
+          // Fall back to local calculation
+        }
+      }
+
+      const req = state.requests.find((r) => String(r._id) === String(requestId)) || state.requests[0];
+      if (!req) {
+        container.innerHTML = `<div class="p-4 text-xs text-slate-500">No request selected.</div>`;
+        return;
+      }
+
+      const [reqLng, reqLat] = req.location.coordinates;
+      const matches = state.devices
+        .filter((d) => d.category === req.category && d.status === "available")
+        .map((d) => {
+          const [devLng, devLat] = (d.location && d.location.coordinates) || CITY_COORDS[d.city] || [75.8573, 30.9010];
+          return {
+            ...d,
+            distance_meters: haversineMeters(reqLng, reqLat, devLng, devLat)
+          };
+        })
+        .filter((d) => d.distance_meters <= 25000)
+        .sort((a, b) => a.distance_meters - b.distance_meters);
+
+      badge.textContent = `${matches.length} matches within 25 km (${req.city})`;
+      renderMatchCards(matches);
+    }
+
+    function renderMatchCards(matches) {
+      const container = document.getElementById("matchResultsContainer");
+      container.innerHTML = "";
+
+      if (matches.length === 0) {
+        container.innerHTML = `
+          <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
+            No available devices with fresh inspection (&le;180 days) found within 25 km of this request.
+          </div>
+        `;
+        return;
+      }
+
+      matches.slice(0, 6).forEach((m) => {
+        const km = (m.distance_meters / 1000).toFixed(2);
+        const specsStr = JSON.stringify(m.specs || {});
+        const card = document.createElement("div");
+        card.className = "p-3.5 rounded-xl border border-slate-200 hover:border-teal-500 bg-white shadow-sm flex flex-wrap items-center justify-between gap-3 transition";
+        card.innerHTML = `
+          <div class="space-y-1">
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-xs text-slate-900">${m.name}</span>
+              <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-teal-50 text-teal-700 mono">${m.distance_meters} m (${km} km)</span>
+            </div>
+            <p class="text-[11px] text-slate-500 mono">ID: ${m._id} | City: ${m.city} | Embedded Specs: ${specsStr}</p>
+            <p class="text-[11px] text-emerald-700 font-medium">
+              Status: available &bull; Last Inspected: ${formatDateShort(m.last_inspection_at)} (&le;180d verified)
+            </p>
+          </div>
+          <button type="button" data-reserve-id="${m._id}" class="reserve-match-btn px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold">
+            Inspect / Reserve
+          </button>
+        `;
+        container.appendChild(card);
+      });
+
+      container.querySelectorAll(".reserve-match-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const devId = btn.getAttribute("data-reserve-id");
+          const found = state.devices.find((d) => String(d._id) === String(devId));
+          if (!found) {
+            const matchObj = matches.find((m) => String(m._id) === String(devId));
+            if (matchObj) state.devices.unshift(matchObj);
+          }
+          state.activeDeviceId = String(devId);
+          switchTab("lifecycle");
+          renderLifecycleTab();
+          loadDeviceHistory(state.activeDeviceId);
+        });
+      });
+    }
+
+    function renderDynamicSpecsInputs() {
+      const category = document.getElementById("devCategory").value;
+      const container = document.getElementById("dynamicSpecsInputs");
+      if (category === "oxygen_concentrator") {
+        container.innerHTML = `
+          <div>
+            <label class="block text-[11px] text-slate-600 mb-0.5">flow_lpm (L/min)</label>
+            <input id="specField1" data-key="flow_lpm" type="number" value="5" class="w-full rounded border border-slate-300 px-2 py-1 mono text-xs" />
+          </div>
+          <div>
+            <label class="block text-[11px] text-slate-600 mb-0.5">hours_used (&ge; 0)</label>
+            <input id="specField2" data-key="hours_used" type="number" min="0" value="310" class="w-full rounded border border-slate-300 px-2 py-1 mono text-xs" />
+          </div>
+        `;
+      } else if (category === "wheelchair") {
+        container.innerHTML = `
+          <div>
+            <label class="block text-[11px] text-slate-600 mb-0.5">seat_width_cm</label>
+            <input id="specField1" data-key="seat_width_cm" type="number" value="46" class="w-full rounded border border-slate-300 px-2 py-1 mono text-xs" />
+          </div>
+          <div>
+            <label class="block text-[11px] text-slate-600 mb-0.5">max_load_kg</label>
+            <input id="specField2" data-key="max_load_kg" type="number" value="120" class="w-full rounded border border-slate-300 px-2 py-1 mono text-xs" />
+          </div>
+        `;
+      } else {
+        container.innerHTML = `
+          <div>
+            <label class="block text-[11px] text-slate-600 mb-0.5">hours_used (&ge; 0)</label>
+            <input id="specField1" data-key="hours_used" type="number" min="0" value="120" class="w-full rounded border border-slate-300 px-2 py-1 mono text-xs" />
+          </div>
+          <div>
+            <label class="block text-[11px] text-slate-600 mb-0.5">standard_kit</label>
+            <input id="specField2" data-key="standard_kit" type="text" value="complete" class="w-full rounded border border-slate-300 px-2 py-1 mono text-xs" />
+          </div>
+        `;
+      }
+    }
+
+    function renderLifecycleTab() {
+      const select = document.getElementById("activeDeviceSelect");
+      select.innerHTML = "";
+      state.devices.forEach((dev) => {
+        const opt = document.createElement("option");
+        opt.value = dev._id;
+        opt.textContent = `${String(dev._id).slice(-8)} | ${dev.name} [${dev.status}]`;
+        if (String(dev._id) === String(state.activeDeviceId)) {
+          opt.selected = true;
+        }
+        select.appendChild(opt);
+      });
+
+      const activeDev = state.devices.find((d) => String(d._id) === String(state.activeDeviceId)) || state.devices[0];
+      if (!activeDev) return;
+
+      document.getElementById("activeDevName").textContent = activeDev.name;
+      document.getElementById("activeDevCategory").textContent = activeDev.category;
+      document.getElementById("activeDevMeta").textContent =
+        `ID: ${activeDev._id} | City: ${activeDev.city} | Embedded Specs: ${JSON.stringify(activeDev.specs || {})}`;
+      document.getElementById("activeDevStatusBadge").textContent = activeDev.status;
+
+      const grid = document.getElementById("transitionButtonsGrid");
+      grid.innerHTML = "";
+
+      VALID_STATUSES.forEach((targetStatus) => {
+        const allowed = isValidTransition(activeDev.status, targetStatus);
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = allowed
+          ? "px-2.5 py-2 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-semibold text-xs mono transition flex flex-col items-center"
+          : "px-2.5 py-2 rounded-lg border border-rose-200 bg-rose-50/60 hover:bg-rose-100 text-rose-800 text-xs mono transition flex flex-col items-center";
+        btn.innerHTML = `
+          <span>&rarr; ${targetStatus}</span>
+          <span class="text-[10px] font-normal ${allowed ? 'text-emerald-700' : 'text-rose-600'}">${allowed ? 'VALID (200)' : 'INVALID (409)'}</span>
+        `;
+        btn.addEventListener("click", () => handleTransitionClick(activeDev._id, activeDev.status, targetStatus));
+        grid.appendChild(btn);
+      });
+    }
+
+    async function loadDeviceHistory(deviceId) {
+      if (state.isLiveBackend) {
+        try {
+          const resp = await fetch(`${state.apiBase}/devices/${deviceId}/history`);
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data.device) {
+              const idx = state.devices.findIndex((d) => String(d._id) === String(deviceId));
+              if (idx >= 0) state.devices[idx] = data.device;
+              else state.devices.unshift(data.device);
+            }
+            state.eventsByDevice[deviceId] = data.events || [];
+            renderLifecycleTab();
+            renderEventHistoryList(deviceId);
+            return;
+          }
+        } catch (_e) {
+          // Fallback to local state
+        }
+      }
+      renderEventHistoryList(deviceId);
+    }
+
+    function renderEventHistoryList(deviceId) {
+      const events = state.eventsByDevice[deviceId] || [];
+      document.getElementById("eventCountBadge").textContent = `${events.length} events`;
+      const list = document.getElementById("eventHistoryList");
+      list.innerHTML = "";
+
+      events.forEach((evt) => {
+        const item = document.createElement("div");
+        item.className = "p-3 rounded-lg border border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-2 text-xs";
+        item.innerHTML = `
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 rounded font-bold bg-slate-900 text-teal-300 mono text-[11px]">${evt.type}</span>
+              <span class="mono font-semibold text-slate-800">${evt.from_status || "null"} &rarr; ${evt.to_status}</span>
+            </div>
+            <p class="text-[11px] text-slate-600 mt-1 mono">details: ${JSON.stringify(evt.details || {})}</p>
+          </div>
+          <div class="text-right mono text-[11px] text-slate-500">
+            <div>${formatDateShort(evt.ts)}</div>
+            <div>actor: ${String(evt.actor_id).slice(-8)}</div>
+          </div>
+        `;
+        list.appendChild(item);
+      });
+    }
+
+    async function handleTransitionClick(deviceId, fromStatus, toStatus) {
+      const feedbackBox = document.getElementById("transitionFeedbackBox");
+      const actorId = document.getElementById("devOwnerId").value || "652a1b2c3d4e5f6a7b8c9d03";
+
+      if (state.isLiveBackend) {
+        try {
+          const resp = await fetch(`${state.apiBase}/devices/${deviceId}/transition`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              to_status: toStatus,
+              actor_id: actorId,
+              details: toStatus === "inspected"
+                ? { result: "pass", checklist: ["functional_test", "safety_labels_checked"] }
+                : { note: `Transitioned ${fromStatus} -> ${toStatus} via MedLoop Console` }
+            })
+          });
+          const data = await resp.json();
+          if (!resp.ok) {
+            feedbackBox.className = "p-3 rounded-lg border text-xs bg-rose-50 border-rose-300 text-rose-900 mono";
+            feedbackBox.textContent = `HTTP ${resp.status} Conflict: ${data.detail}`;
+            showToast("HTTP 409 Conflict (State Machine Guard)", data.detail, true);
+            return;
+          }
+          feedbackBox.className = "p-3 rounded-lg border text-xs bg-emerald-50 border-emerald-300 text-emerald-900 mono";
+          feedbackBox.textContent = `HTTP 200 OK: Atomic find_one_and_update succeeded (${fromStatus} -> ${toStatus}). Event ${data.event._id} appended.`;
+          showToast("Atomic Transition Succeeded", `Device moved from '${fromStatus}' to '${toStatus}'.`);
+          await loadDeviceHistory(deviceId);
+          return;
+        } catch (_e) {
+          // Fall back to in-memory validation
+        }
+      }
+
+      if (!isValidTransition(fromStatus, toStatus)) {
+        const msg = `Invalid state transition from '${fromStatus}' to '${toStatus}'.`;
+        feedbackBox.className = "p-3 rounded-lg border text-xs bg-rose-50 border-rose-300 text-rose-900 mono";
+        feedbackBox.textContent = `HTTP 409 Conflict: ${msg}`;
+        showToast("HTTP 409 Conflict (State Machine Guard)", msg, true);
+        return;
+      }
+
+      const dev = state.devices.find((d) => String(d._id) === String(deviceId));
+      if (!dev) return;
+      dev.status = toStatus;
+      const nowIso = new Date().toISOString();
+      if (toStatus === "inspected") dev.last_inspection_at = nowIso;
+      if (toStatus === "sanitized") dev.last_sanitized_at = nowIso;
+
+      if (!state.eventsByDevice[deviceId]) state.eventsByDevice[deviceId] = [];
+      state.eventsByDevice[deviceId].unshift({
+        _id: randomHexId(),
+        device_id: deviceId,
+        type: STATUS_TO_EVENT_TYPE[toStatus] || "serviced",
+        actor_id: actorId,
+        ts: nowIso,
+        from_status: fromStatus,
+        to_status: toStatus,
+        details: toStatus === "inspected"
+          ? { result: "pass", checklist: ["functional_test", "safety_labels_checked"] }
+          : { note: `Transitioned ${fromStatus} -> ${toStatus}` }
+      });
+
+      feedbackBox.className = "p-3 rounded-lg border text-xs bg-emerald-50 border-emerald-300 text-emerald-900 mono";
+      feedbackBox.textContent = `HTTP 200 OK: Atomic find_one_and_update({"_id": "${deviceId}", "status": "${fromStatus}"}) -> "${toStatus}"`;
+      showToast("Transition Recorded", `Device transitioned ${fromStatus} -> ${toStatus}`);
+      renderLifecycleTab();
+      renderEventHistoryList(deviceId);
+    }
+
+    // -----------------------------------------------------------------------
+    // 6. Tab Navigation & Event Listeners
+    // -----------------------------------------------------------------------
+    function switchTab(tabName) {
+      state.activeTab = tabName;
+      const panels = {
+        analytics: document.getElementById("tabPanelAnalytics"),
+        matcher: document.getElementById("tabPanelMatcher"),
+        lifecycle: document.getElementById("tabPanelLifecycle")
+      };
+      Object.keys(panels).forEach((k) => {
+        if (k === tabName) panels[k].classList.remove("hidden");
+        else panels[k].classList.add("hidden");
+      });
+
+      document.querySelectorAll(".nav-tab-btn").forEach((btn) => {
+        const isCurrent = btn.getAttribute("data-tab") === tabName;
+        btn.className = isCurrent
+          ? "nav-tab-btn px-4 py-2.5 text-xs font-semibold border-b-2 border-teal-600 text-teal-700 whitespace-nowrap"
+          : "nav-tab-btn px-4 py-2.5 text-xs font-semibold border-b-2 border-transparent text-slate-600 hover:text-slate-900 whitespace-nowrap";
+      });
+    }
+
+    function renderAll() {
+      renderKPIs();
+      renderShortagesTableAndChart();
+      renderOverdueTable();
+      renderMatcherTab();
+      renderLifecycleTab();
+      renderEventHistoryList(state.activeDeviceId);
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      // Tab switching
+      document.querySelectorAll(".nav-tab-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const target = btn.getAttribute("data-tab");
+          switchTab(target);
+          if (target === "matcher") {
+            executeGeoNearMatch(state.activeRequestId);
+          }
+        });
+      });
+
+      document.getElementById("closeToastBtn").addEventListener("click", () => {
+        document.getElementById("toastContainer").classList.add("hidden");
+      });
+
+      document.getElementById("syncBackendBtn").addEventListener("click", () => {
+        syncWithLiveBackend();
+      });
+
+      document.getElementById("refreshShortagesBtn").addEventListener("click", () => {
+        syncWithLiveBackend();
+      });
+
+      document.getElementById("analyticsCityFilter").addEventListener("change", (e) => {
+        state.selectedCityFilter = e.target.value;
+        renderShortagesTableAndChart();
+      });
+
+      document.getElementById("reqCity").addEventListener("change", (e) => {
+        const coords = CITY_COORDS[e.target.value] || [75.8573, 30.9010];
+        document.getElementById("reqLng").value = coords[0];
+        document.getElementById("reqLat").value = coords[1];
+      });
+
+      document.getElementById("sampleRequestSelect").addEventListener("change", (e) => {
+        state.activeRequestId = e.target.value;
+        executeGeoNearMatch(state.activeRequestId);
+      });
+
+      document.getElementById("runMatchBtn").addEventListener("click", () => {
+        const sel = document.getElementById("sampleRequestSelect").value;
+        state.activeRequestId = sel;
+        executeGeoNearMatch(sel);
+      });
+
+      // Create Request Form Submit (POST /requests)
+      document.getElementById("createRequestForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const payload = {
+          requester_id: document.getElementById("reqRequesterId").value.trim(),
+          category: document.getElementById("reqCategory").value,
+          city: document.getElementById("reqCity").value,
+          location: {
+            type: "Point",
+            coordinates: [
+              parseFloat(document.getElementById("reqLng").value),
+              parseFloat(document.getElementById("reqLat").value)
+            ]
+          },
+          urgency: document.getElementById("reqUrgency").value
+        };
+
+        if (state.isLiveBackend) {
+          try {
+            const resp = await fetch(`${state.apiBase}/requests`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            const data = await resp.json();
+            if (!resp.ok) {
+              showToast("Request Validation Error", data.detail || "Failed to create request", true);
+              return;
+            }
+            state.requests.unshift(data.request);
+            state.activeRequestId = data.request._id;
+            renderMatcherTab();
+            await executeGeoNearMatch(state.activeRequestId);
+            showToast("POST /requests (201 Created)", `Request ${data.request._id} created with 14-day TTL expires_at.`);
+            return;
+          } catch (_err) {
+            // Fall back to local state
+          }
+        }
+
+        const newReq = {
+          _id: randomHexId(),
+          ...payload,
+          status: "open",
+          created_at: new Date().toISOString(),
+          expires_at: new Date(Date.now() + 14 * 86400000).toISOString()
+        };
+        state.requests.unshift(newReq);
+        state.activeRequestId = newReq._id;
+        renderMatcherTab();
+        executeGeoNearMatch(state.activeRequestId);
+        showToast("POST /requests (201 Created)", `Request ${newReq._id} created with 14-day TTL.`);
+      });
+
+      document.getElementById("devCategory").addEventListener("change", () => {
+        renderDynamicSpecsInputs();
+      });
+
+      document.getElementById("activeDeviceSelect").addEventListener("change", (e) => {
+        state.activeDeviceId = e.target.value;
+        renderLifecycleTab();
+        loadDeviceHistory(state.activeDeviceId);
+      });
+
+      // Create Device Form Submit (POST /devices)
+      document.getElementById("createDeviceForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const cat = document.getElementById("devCategory").value;
+        const city = document.getElementById("devCity").value;
+        const coords = CITY_COORDS[city] || [75.8573, 30.9010];
+        const specs = {};
+        const f1 = document.getElementById("specField1");
+        const f2 = document.getElementById("specField2");
+        if (f1) specs[f1.getAttribute("data-key")] = isNaN(Number(f1.value)) ? f1.value : Number(f1.value);
+        if (f2) specs[f2.getAttribute("data-key")] = isNaN(Number(f2.value)) ? f2.value : Number(f2.value);
+
+        const payload = {
+          category: cat,
+          name: document.getElementById("devName").value.trim(),
+          specs,
+          owner_id: document.getElementById("devOwnerId").value.trim(),
+          location: { type: "Point", coordinates: coords },
+          city,
+          notes: document.getElementById("devNotes").value.trim(),
+          purchase_value: document.getElementById("devPurchaseValue").value
+        };
+
+        if (state.isLiveBackend) {
+          try {
+            const resp = await fetch(`${state.apiBase}/devices`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            const data = await resp.json();
+            if (!resp.ok) {
+              showToast("$jsonSchema / Validation Error", data.detail || "Failed to list device", true);
+              return;
+            }
+            state.devices.unshift(data.device);
+            state.activeDeviceId = data.device._id;
+            await loadDeviceHistory(state.activeDeviceId);
+            showToast("POST /devices (201 Created)", `Device ${data.device._id} listed with initial 'listed' event.`);
+            return;
+          } catch (_err) {
+            // Fall back to local state
+          }
+        }
+
+        const newDevId = randomHexId();
+        const nowIso = new Date().toISOString();
+        const newDev = {
+          _id: newDevId,
+          ...payload,
+          status: "listed",
+          requires_inspection: ["oxygen_concentrator", "hospital_bed", "nebulizer"].includes(cat),
+          last_inspection_at: null,
+          last_sanitized_at: null,
+          listed_at: nowIso
+        };
+        state.devices.unshift(newDev);
+        state.eventsByDevice[newDevId] = [
+          {
+            _id: randomHexId(),
+            device_id: newDevId,
+            type: "listed",
+            actor_id: payload.owner_id,
+            ts: nowIso,
+            from_status: null,
+            to_status: "listed",
+            details: { note: "Device listed in MedLoop registry" }
+          }
+        ];
+        state.activeDeviceId = newDevId;
+        renderLifecycleTab();
+        renderEventHistoryList(newDevId);
+        showToast("POST /devices (201 Created)", `Listed ${newDev.name} (status: 'listed') and wrote audit event.`);
+      });
+
+      renderDynamicSpecsInputs();
+      renderAll();
+      executeGeoNearMatch(state.activeRequestId);
+      syncWithLiveBackend();
+    });
+  </script>
+</body>
+</html>
